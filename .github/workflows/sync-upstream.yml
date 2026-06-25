@@ -18,6 +18,8 @@ env:
   BASE_BRANCH: Abhash-Main
   UPSTREAM_REPOSITORY: jellyfin/jellyfin
   UPSTREAM_BRANCH: master
+  WEB_UPSTREAM_REPOSITORY: jellyfin/jellyfin-web
+  WEB_UPSTREAM_BRANCH: master
   SYNC_BRANCH: sync/upstream-master
   SDK_VERSION: "10.0.x"
   GH_TOKEN: ${{ secrets.ABHASH_BOT_TOKEN || github.token }}
@@ -58,7 +60,9 @@ jobs:
           git fetch origin "${BASE_BRANCH}"
           git switch -C "${SYNC_BRANCH}" "origin/${BASE_BRANCH}"
           git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git" || true
+          git remote add upstream-web "https://github.com/${WEB_UPSTREAM_REPOSITORY}.git" || true
           git fetch upstream "${UPSTREAM_BRANCH}"
+          git fetch upstream-web "${WEB_UPSTREAM_BRANCH}"
 
       - name: Merge upstream
         id: merge
@@ -82,28 +86,71 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Sync jellyfin-web upstream
+        id: web_sync
+        if: steps.merge.outputs.conflict != 'true'
+        shell: bash
+        run: |
+          set +e
+          git subtree pull \
+            --prefix=jellyfin-web \
+            upstream-web "${WEB_UPSTREAM_BRANCH}" \
+            --squash \
+            -m "Sync jellyfin-web from ${WEB_UPSTREAM_REPOSITORY}:${WEB_UPSTREAM_BRANCH}"
+          status=$?
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            git status --short
+            git merge --abort || true
+            exit 0
+          fi
+
+          if git diff --quiet "origin/${BASE_BRANCH}".."${SYNC_BRANCH}"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Stop on conflict
-        if: steps.merge.outputs.conflict == 'true'
+        if: steps.merge.outputs.conflict == 'true' || steps.web_sync.outputs.conflict == 'true'
         run: |
           echo "Upstream merge has conflicts. Resolve once locally with rerere enabled, then rerun this workflow."
           exit 1
 
       - name: Setup .NET
-        if: steps.merge.outputs.changed == 'true'
+        if: steps.merge.outputs.changed == 'true' || steps.web_sync.outputs.changed == 'true'
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.SDK_VERSION }}
 
       - name: Test merged result
-        if: steps.merge.outputs.changed == 'true'
+        if: steps.merge.outputs.changed == 'true' || steps.web_sync.outputs.changed == 'true'
         run: dotnet test Jellyfin.sln --configuration Release --verbosity minimal
 
+      - name: Setup Node.js
+        if: steps.merge.outputs.changed == 'true' || steps.web_sync.outputs.changed == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: jellyfin-web/package-lock.json
+
+      - name: Test web client
+        if: steps.merge.outputs.changed == 'true' || steps.web_sync.outputs.changed == 'true'
+        working-directory: jellyfin-web
+        run: |
+          npm ci
+          npm run build:check
+          npm test
+
       - name: Push sync branch
-        if: steps.merge.outputs.changed == 'true'
+        if: steps.merge.outputs.changed == 'true' || steps.web_sync.outputs.changed == 'true'
         run: git push --force-with-lease origin "${SYNC_BRANCH}"
 
       - name: Create or reuse pull request
-        if: steps.merge.outputs.changed == 'true'
+        if: steps.merge.outputs.changed == 'true' || steps.web_sync.outputs.changed == 'true'
         id: pr
         shell: bash
         run: |
@@ -118,9 +165,9 @@ jobs:
           echo "url=${pr_url}" >> "$GITHUB_OUTPUT"
 
       - name: Merge pull request
-        if: steps.merge.outputs.changed == 'true'
+        if: steps.merge.outputs.changed == 'true' || steps.web_sync.outputs.changed == 'true'
         run: gh pr merge "${{ steps.pr.outputs.url }}" --merge --delete-branch
 
       - name: Publish merged image
-        if: steps.merge.outputs.changed == 'true'
+        if: steps.merge.outputs.changed == 'true' || steps.web_sync.outputs.changed == 'true'
         run: gh workflow run publish-ghcr.yml --ref "${BASE_BRANCH}"

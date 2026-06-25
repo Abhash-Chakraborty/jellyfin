@@ -11,7 +11,15 @@ RUN dotnet publish Jellyfin.Server/Jellyfin.Server.csproj \
     --no-restore \
     -p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
+FROM node:24-bookworm-slim AS web-build
+WORKDIR /src/jellyfin-web
+
+COPY jellyfin-web/package.json jellyfin-web/package-lock.json ./
+RUN npm ci
+COPY jellyfin-web/ ./
+RUN npm run build:production
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS base-runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -40,5 +48,9 @@ USER jellyfin
 EXPOSE 8096
 VOLUME ["/config", "/cache", "/media"]
 
+FROM base-runtime AS server-runtime
 ENTRYPOINT ["dotnet", "/app/jellyfin.dll", "--service", "--nowebclient", "--ffmpeg", "/usr/bin/ffmpeg"]
 
+FROM base-runtime AS runtime
+COPY --from=web-build /src/jellyfin-web/dist/ /app/jellyfin-web/
+ENTRYPOINT ["dotnet", "/app/jellyfin.dll", "--service", "--webdir", "/app/jellyfin-web", "--ffmpeg", "/usr/bin/ffmpeg"]

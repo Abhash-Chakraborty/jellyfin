@@ -8,3 +8,8 @@ deployment/*/dist
 deployment/*/pkg-dist
 deployment/collect-dist/
 ci/
+jellyfin-web/dist
+jellyfin-web/web
+jellyfin-web/node_modules
+jellyfin-web/coverage
+jellyfin-web/.git
