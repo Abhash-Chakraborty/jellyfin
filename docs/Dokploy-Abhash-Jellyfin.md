@@ -49,6 +49,8 @@ services:
     image: ghcr.io/abhash-chakraborty/jellyfin-abhash:latest
     container_name: jellyfin-abhash
     restart: unless-stopped
+    init: true
+    user: "1000:1000"
     ports:
       - "8096:8096"
     environment:
@@ -60,11 +62,20 @@ services:
       - /srv/media:/media:ro
       - /mnt/media-vm-1:/media-vm-1:ro
       - /mnt/media-vm-2:/media-vm-2:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 volumes:
   jellyfin_config:
   jellyfin_cache:
 ```
+
+> A full, consolidated walkthrough (local build, compose, Dokploy, Samba
+> multi-VM storage, and upstream sync) lives in [SETUP.md](SETUP.md).
 
 Change these before deploying:
 

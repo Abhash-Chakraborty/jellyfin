@@ -4,7 +4,11 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
 WORKDIR /src
 
 COPY . .
-RUN dotnet restore Jellyfin.Server/Jellyfin.Server.csproj
+# Retry restore to survive transient NuGet/network failures (observed in CI
+# and container builds, e.g. SkiaSharp native asset download flakes).
+RUN dotnet restore Jellyfin.Server/Jellyfin.Server.csproj \
+    || (sleep 15 && dotnet restore Jellyfin.Server/Jellyfin.Server.csproj) \
+    || (sleep 30 && dotnet restore Jellyfin.Server/Jellyfin.Server.csproj)
 RUN dotnet publish Jellyfin.Server/Jellyfin.Server.csproj \
     --configuration Release \
     --output /app/publish \
@@ -25,6 +29,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        curl \
         ffmpeg \
         fonts-dejavu-core \
         libfontconfig1 \
@@ -46,6 +51,10 @@ RUN mkdir -p /jellyfin /config /cache /media \
 USER 1000:1000
 EXPOSE 8096
 VOLUME ["/config", "/cache", "/media"]
+
+# Both image targets expose Jellyfin's /health endpoint on port 8096.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -fsS http://localhost:8096/health || exit 1
 
 FROM base-runtime AS server-runtime
 ENTRYPOINT ["dotnet", "/app/jellyfin.dll", "--service", "--nowebclient", "--ffmpeg", "/usr/bin/ffmpeg"]

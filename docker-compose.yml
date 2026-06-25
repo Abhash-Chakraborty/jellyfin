@@ -1,0 +1,54 @@
+# Docker Compose for the Abhash Jellyfin all-in-one image.
+#
+# This runs the bundled server + jellyfin-web. Media folders are mounted from
+# the host. To attach media from other VMs, mount their Samba/CIFS shares onto
+# the host first (see docs/SETUP.md), then list them under `volumes` below.
+#
+# Usage:
+#   docker compose up -d
+#
+# Replace the image with the GHCR build for production:
+#   image: ghcr.io/abhash-chakraborty/jellyfin-abhash:latest
+
+services:
+  jellyfin:
+    # For local builds use the build context; for production swap to the image.
+    build:
+      context: .
+      target: runtime
+    image: ghcr.io/abhash-chakraborty/jellyfin-abhash:latest
+    container_name: jellyfin-abhash
+    restart: unless-stopped
+    # Run an init process as PID 1 so signals are forwarded and zombie
+    # processes (e.g. transcode helpers) are reaped cleanly.
+    init: true
+    # Jellyfin runs as uid:gid 1000:1000 inside the container. Mounted media
+    # and Samba shares must be readable by uid 1000 (set uid=1000 in the
+    # CIFS mount options shown in docs/SETUP.md).
+    user: "1000:1000"
+    ports:
+      - "8096:8096"          # HTTP web UI / API
+      # - "8920:8920"        # optional HTTPS (configure cert in Jellyfin)
+      # - "7359:7359/udp"    # optional client auto-discovery
+      # - "1900:1900/udp"    # optional DLNA
+    environment:
+      TZ: "Asia/Kolkata"
+      JELLYFIN_PublishedServerUrl: "https://jellyfin.your-domain.com"
+    volumes:
+      - jellyfin_config:/config
+      - jellyfin_cache:/cache
+      # Local media on the Docker host:
+      - /srv/media:/media:ro
+      # Media from other VMs, mounted on the host via Samba/CIFS first:
+      - /mnt/media-vm-1:/media-vm-1:ro
+      - /mnt/media-vm-2:/media-vm-2:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  jellyfin_config:
+  jellyfin_cache:

@@ -13,3 +13,14 @@ jellyfin-web/web
 jellyfin-web/node_modules
 jellyfin-web/coverage
 jellyfin-web/.git
+
+# Local tooling / build artifacts (not needed in the image build context)
+.kiro
+.codex
+.agents
+docs
+docker-compose.yml
+*.ps1
+build-*.log
+aio-status.log
+build-status.log
