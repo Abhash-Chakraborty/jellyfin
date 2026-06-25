@@ -1,0 +1,126 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: sync-upstream-abhash-main
+  cancel-in-progress: false
+
+env:
+  BASE_BRANCH: Abhash-Main
+  UPSTREAM_REPOSITORY: jellyfin/jellyfin
+  UPSTREAM_BRANCH: master
+  SYNC_BRANCH: sync/upstream-master
+  SDK_VERSION: "10.0.x"
+  GH_TOKEN: ${{ secrets.ABHASH_BOT_TOKEN || github.token }}
+
+jobs:
+  sync:
+    name: Merge upstream into Abhash-Main
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Abhash-Main
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.BASE_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.ABHASH_BOT_TOKEN || github.token }}
+
+      - name: Enable recorded conflict reuse
+        run: |
+          git config rerere.enabled true
+          git config rerere.autoupdate true
+
+      - name: Restore rerere cache
+        uses: actions/cache@v4
+        with:
+          path: .git/rr-cache
+          key: rerere-${{ runner.os }}-${{ env.BASE_BRANCH }}
+          restore-keys: |
+            rerere-${{ runner.os }}-
+
+      - name: Configure git author
+        run: |
+          git config user.name "abhash-upstream-sync"
+          git config user.email "actions@github.com"
+
+      - name: Prepare sync branch
+        run: |
+          git fetch origin "${BASE_BRANCH}"
+          git switch -C "${SYNC_BRANCH}" "origin/${BASE_BRANCH}"
+          git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git" || true
+          git fetch upstream "${UPSTREAM_BRANCH}"
+
+      - name: Merge upstream
+        id: merge
+        shell: bash
+        run: |
+          set +e
+          git merge --no-edit "upstream/${UPSTREAM_BRANCH}"
+          status=$?
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            git status --short
+            git merge --abort || true
+            exit 0
+          fi
+
+          if git diff --quiet "origin/${BASE_BRANCH}".."${SYNC_BRANCH}"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop on conflict
+        if: steps.merge.outputs.conflict == 'true'
+        run: |
+          echo "Upstream merge has conflicts. Resolve once locally with rerere enabled, then rerun this workflow."
+          exit 1
+
+      - name: Setup .NET
+        if: steps.merge.outputs.changed == 'true'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.SDK_VERSION }}
+
+      - name: Test merged result
+        if: steps.merge.outputs.changed == 'true'
+        run: dotnet test Jellyfin.sln --configuration Release --verbosity minimal
+
+      - name: Push sync branch
+        if: steps.merge.outputs.changed == 'true'
+        run: git push --force-with-lease origin "${SYNC_BRANCH}"
+
+      - name: Create or reuse pull request
+        if: steps.merge.outputs.changed == 'true'
+        id: pr
+        shell: bash
+        run: |
+          pr_url="$(gh pr view "${SYNC_BRANCH}" --json url --jq .url 2>/dev/null || true)"
+          if [ -z "$pr_url" ]; then
+            pr_url="$(gh pr create \
+              --base "${BASE_BRANCH}" \
+              --head "${SYNC_BRANCH}" \
+              --title "Sync upstream ${UPSTREAM_REPOSITORY}:${UPSTREAM_BRANCH}" \
+              --body "Automated upstream sync into ${BASE_BRANCH}. Tests passed before this PR was opened.")"
+          fi
+          echo "url=${pr_url}" >> "$GITHUB_OUTPUT"
+
+      - name: Merge pull request
+        if: steps.merge.outputs.changed == 'true'
+        run: gh pr merge "${{ steps.pr.outputs.url }}" --merge --delete-branch
+
+      - name: Publish merged image
+        if: steps.merge.outputs.changed == 'true'
+        run: gh workflow run publish-ghcr.yml --ref "${BASE_BRANCH}"
