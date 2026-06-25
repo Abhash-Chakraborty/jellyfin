@@ -40,11 +40,10 @@ ENV ASPNETCORE_URLS=http://+:8096 \
 WORKDIR /app
 COPY --from=build /app/publish/ ./
 
-RUN useradd --system --uid 1000 --create-home --home-dir /jellyfin jellyfin \
-    && mkdir -p /config /cache /media \
-    && chown -R jellyfin:jellyfin /config /cache /media /app
+RUN mkdir -p /jellyfin /config /cache /media \
+    && chown -R 1000:1000 /jellyfin /config /cache /media /app
 
-USER jellyfin
+USER 1000:1000
 EXPOSE 8096
 VOLUME ["/config", "/cache", "/media"]
 
