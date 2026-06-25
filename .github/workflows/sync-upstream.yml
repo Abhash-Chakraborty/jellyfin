@@ -100,7 +100,12 @@ jobs:
           rm -rf jellyfin-web
           mkdir jellyfin-web
           git archive "upstream-web/${WEB_UPSTREAM_BRANCH}" | tar -x -C jellyfin-web
-          git add -A jellyfin-web
+          # Force-add: the archive only contains files upstream tracks, but some
+          # of them (e.g. src/config.json, and the dashboard "backups" feature
+          # caught by the root .NET .gitignore pattern "Backup*/") match a
+          # .gitignore rule. Without -f they would be silently dropped and break
+          # the web build (tsc: "Cannot find module '../config.json'").
+          git add -A -f jellyfin-web
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
