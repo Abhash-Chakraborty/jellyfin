@@ -23,6 +23,15 @@ RUN npm ci
 COPY jellyfin-web/ ./
 RUN npm run build:production
 
+# Apply the Jellyfin Web null ApiClient hotfix to the freshly built bundles.
+# python3 is only needed here in the throwaway web-build stage; it never lands
+# in the final runtime image.
+COPY scripts/patch-jellyfin-web.sh /usr/local/bin/patch-jellyfin-web.sh
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && JELLYFIN_WEB_ROOT=/src/jellyfin-web/dist sh /usr/local/bin/patch-jellyfin-web.sh
+
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS base-runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -61,4 +70,8 @@ ENTRYPOINT ["dotnet", "/app/jellyfin.dll", "--service", "--nowebclient", "--ffmp
 
 FROM base-runtime AS runtime
 COPY --from=web-build /src/jellyfin-web/dist/ /app/jellyfin-web/
+# Fail the build if the Jellyfin Web null ApiClient hotfix is not present in the
+# final web root (it is applied during the web-build stage above).
+RUN grep -q "getApiClient called with null in main bundle" /app/jellyfin-web/main.jellyfin.bundle.js \
+    && grep -q "main.jellyfin.bundle.js?patched-main-v2" /app/jellyfin-web/index.html
 ENTRYPOINT ["dotnet", "/app/jellyfin.dll", "--service", "--webdir", "/app/jellyfin-web", "--ffmpeg", "/usr/bin/ffmpeg"]
