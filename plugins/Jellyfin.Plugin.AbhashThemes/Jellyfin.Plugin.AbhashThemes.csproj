@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <!-- This is a Jellyfin plugin assembly; it must not generate its own
+         AssemblyInfo (version comes from SharedVersion.cs below). -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>Jellyfin.Plugin.AbhashThemes</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.AbhashThemes</AssemblyName>
+    <!-- A plugin ships as a stand-alone DLL dropped into the plugins folder;
+         it is not part of the server solution composition. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Share the repository version so the plugin assembly version always
+       matches the server it is compiled against (currently 12.0.0). This is
+       what makes the plugin ABI-safe against this exact build. -->
+  <ItemGroup>
+    <Compile Include="..\..\SharedVersion.cs" />
+  </ItemGroup>
+
+  <!-- Reference the in-tree server contracts so we compile against THIS
+       server's ABI rather than a published NuGet package. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\MediaBrowser.Common\MediaBrowser.Common.csproj" />
+    <ProjectReference Include="..\..\MediaBrowser.Controller\MediaBrowser.Controller.csproj" />
+    <ProjectReference Include="..\..\MediaBrowser.Model\MediaBrowser.Model.csproj" />
+  </ItemGroup>
+
+  <!-- The plugin exposes an MVC controller (GET /AbhashThemes/inject.js) and
+       uses IHttpClientFactory / IMemoryCache, all provided by the shared
+       ASP.NET Core framework. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- The dashboard configuration page is served from an embedded resource. -->
+  <ItemGroup>
+    <None Remove="Configuration\config.html" />
+    <EmbeddedResource Include="Configuration\config.html" />
+  </ItemGroup>
+
+</Project>

@@ -102,6 +102,30 @@ path.write_text(s2, encoding="utf-8")
 print(f"Patched {path}")
 PY
 
+# Inject the Abhash Themes loader so the served web client pulls custom CSS/JS
+# from the plugin endpoint (/AbhashThemes/inject.js) on every load. This is
+# applied at build time so it survives the upstream jellyfin-web mirror, and is
+# idempotent + non-fatal: if the marker is already present or </body> is not
+# found, we leave index.html untouched rather than failing the build.
+python3 - "$INDEX" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+s = path.read_text(encoding="utf-8")
+
+tag = '<script defer src="/AbhashThemes/inject.js"></script>'
+
+if tag in s:
+    print(f"Abhash Themes loader already present in {path}")
+elif "</body>" in s:
+    s = s.replace("</body>", f"    {tag}\n</body>", 1)
+    path.write_text(s, encoding="utf-8")
+    print(f"Injected Abhash Themes loader into {path}")
+else:
+    print(f"WARNING: no </body> found in {path}; skipped Abhash Themes loader", file=sys.stderr)
+PY
+
 # Verify the patch actually landed.
 grep -q "getApiClient called with null in main bundle" "$MAIN"
 grep -q "main.jellyfin.bundle.js?patched-main-v2" "$INDEX"

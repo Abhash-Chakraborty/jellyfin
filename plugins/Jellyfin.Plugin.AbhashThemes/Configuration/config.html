@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Abhash Themes</title>
+</head>
+<body>
+    <div id="abhashThemesConfigPage" data-role="page" class="page type-interior pluginConfigurationPage configPage" data-require="emby-input,emby-button,emby-select,emby-checkbox,emby-textarea">
+        <div data-role="content">
+            <div class="content-primary">
+                <h1>Abhash Themes</h1>
+                <p>Inject a CSS theme (and optional JavaScript) into the web client. Changes apply on the next page load — no rebuild required.</p>
+                <form class="abhashThemesConfigForm">
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input is="emby-checkbox" type="checkbox" id="enabled" />
+                            <span>Enable theme injection</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">When disabled, no custom CSS or JS is applied.</div>
+                    </div>
+
+                    <div class="selectContainer">
+                        <label class="selectLabel" for="selectedThemeKey">Curated theme</label>
+                        <select is="emby-select" id="selectedThemeKey" class="emby-select-withcolor">
+                            <option value="none">None</option>
+                            <option value="monochromic">Monochromic (CTalvio)</option>
+                            <option value="kaleidochromic">Kaleidochromic (CTalvio)</option>
+                            <option value="novachromic">Novachromic (CTalvio)</option>
+                            <option value="monochromic-classic">Monochromic Classic (CTalvio)</option>
+                            <option value="custom">Custom only (use fields below)</option>
+                        </select>
+                        <div class="fieldDescription">Pick a community theme, or choose "Custom only" and use the fields below. Curated themes are fetched from public CDNs and are not maintained by this fork.</div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="customCssUrl" label="Custom CSS URL" />
+                        <div class="fieldDescription">Optional. A direct (raw) stylesheet URL, e.g. a GitHub <code>raw.githubusercontent.com</code> or jsDelivr link. Fetched server-side and applied after the curated theme.</div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="customCss" label="Custom CSS" rows="8"></textarea>
+                        <div class="fieldDescription">Optional inline CSS, applied last so it overrides everything above.</div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input is="emby-checkbox" type="checkbox" id="allowRemoteJs" />
+                            <span>Allow custom JavaScript (advanced)</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription" style="color:#cc3333;">Security warning: enabling this executes the JavaScript below in every client browser, including before login. Only enable with code you fully trust.</div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="customJs" label="Custom JavaScript" rows="6"></textarea>
+                        <div class="fieldDescription">Only injected when the checkbox above is enabled.</div>
+                    </div>
+
+                    <br />
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script type="text/javascript">
+            var AbhashThemesConfig = {
+                pluginId: "7f3c2d18-4b6a-4d2e-9c1f-2a5e8b0d4c11"
+            };
+
+            document.querySelector('#abhashThemesConfigPage')
+                .addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(AbhashThemesConfig.pluginId).then(function (config) {
+                        document.querySelector('#enabled').checked = config.Enabled;
+                        document.querySelector('#selectedThemeKey').value = config.SelectedThemeKey || 'none';
+                        document.querySelector('#customCssUrl').value = config.CustomCssUrl || '';
+                        document.querySelector('#customCss').value = config.CustomCss || '';
+                        document.querySelector('#allowRemoteJs').checked = config.AllowRemoteJs;
+                        document.querySelector('#customJs').value = config.CustomJs || '';
+                        Dashboard.hideLoadingMsg();
+                    });
+                });
+
+            document.querySelector('.abhashThemesConfigForm')
+                .addEventListener('submit', function (e) {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(AbhashThemesConfig.pluginId).then(function (config) {
+                        config.Enabled = document.querySelector('#enabled').checked;
+                        config.SelectedThemeKey = document.querySelector('#selectedThemeKey').value;
+                        config.CustomCssUrl = document.querySelector('#customCssUrl').value;
+                        config.CustomCss = document.querySelector('#customCss').value;
+                        config.AllowRemoteJs = document.querySelector('#allowRemoteJs').checked;
+                        config.CustomJs = document.querySelector('#customJs').value;
+                        ApiClient.updatePluginConfiguration(AbhashThemesConfig.pluginId, config).then(Dashboard.processPluginConfigurationUpdateResult);
+                    });
+                    e.preventDefault();
+                    return false;
+                });
+        </script>
+    </div>
+</body>
+</html>

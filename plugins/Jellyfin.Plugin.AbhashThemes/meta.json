@@ -1,0 +1,15 @@
+{
+    "category": "General",
+    "changelog": "Initial release: selectable CSS themes and optional JavaScript injected into the web client, manageable from the dashboard.",
+    "description": "Inject selectable CSS themes and optional JavaScript into the web client. Updatable from the dashboard, no rebuild required.",
+    "guid": "7f3c2d18-4b6a-4d2e-9c1f-2a5e8b0d4c11",
+    "name": "Abhash Themes",
+    "overview": "Web client theme and asset loader.",
+    "owner": "Abhash Chakraborty",
+    "targetAbi": "12.0.0.0",
+    "timestamp": "2026-06-27T00:00:00Z",
+    "version": "1.0.0.0",
+    "status": "Active",
+    "autoUpdate": false,
+    "assemblies": []
+}

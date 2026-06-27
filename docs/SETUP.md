@@ -25,6 +25,11 @@ build, and deploy together:
 the sync workflow — see section 6). The default branch for this fork is
 `Abhash-Main`.
 
+> **Plugins:** this fork tracks upstream `master` (server version `12.0.0`), so
+> most community plugins built for the stable `10.x` ABI install but fail to
+> load. See [PLUGINS.md](PLUGINS.md) for the full explanation and the bundled
+> **Abhash Themes** plugin for restyling the web UI.
+
 ---
 
 ## 2. The two Docker images
